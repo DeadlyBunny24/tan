@@ -2,7 +2,9 @@ import tensorflow as tf
 from ..utils import misc
 import sru
 import utils
+import drnn
 
+# TODO: Implement FRU Cell
 
 class GRUCell:
 
@@ -19,7 +21,6 @@ class GRUCell:
         else:
             gru_cell = tf.contrib.rnn.GRUCell(self._units)
         return tf.contrib.rnn.OutputProjectionWrapper(gru_cell, nout)
-
 
 class GRUResidual:
 
@@ -128,3 +129,23 @@ class GRUSRUCell:
                     include_input=False)
             )
         return tf.contrib.rnn.OutputProjectionWrapper(joint_cell, nout)
+
+class DRNNCell:
+
+    def __init__(self, **kwargs):
+        self.rnn_unit_size = misc.get_default(kwargs, 'rnn_unit_size', 2)
+        self.net_arch = misc.get_default(kwargs, 'net_arch', [1])
+        self.rnn_unit = misc.get_default(kwargs, 'rnn_unit',
+            tf.contrib.rnn.BasicRNNCell)
+        self.activation = misc.get_default(kwargs, 'activation', tf.nn.tanh)
+        self.scope = misc.get_default(kwargs, 'scope', None)
+
+    def __call__(self, nout):
+        cell = drnn.BasicDRNNCell(
+            rnn_unit_size=self.rnn_unit_size,
+            net_arch=self.net_arch,
+            rnn_unit=self.rnn_unit,
+            activation=self.activation,
+            scope=self.scope)
+
+        return tf.contrib.rnn.OutputProjectionWrapper(cell, nout, reuse=tf.AUTO_REUSE)
