@@ -145,7 +145,6 @@ class DRNNCell:
             rnn_unit_size=self.rnn_unit_size,
             net_arch=self.net_arch,
             rnn_unit=self.rnn_unit,
-            activation=self.activation,
-            scope=self.scope)
+            activation=self.activation)
 
         return tf.contrib.rnn.OutputProjectionWrapper(cell, nout, reuse=tf.AUTO_REUSE)
