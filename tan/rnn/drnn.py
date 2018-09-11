@@ -2,46 +2,44 @@ import tensorflow as tf
 from tensorflow.python.ops import array_ops
 
 class BasicDRNNCell(tf.contrib.rnn.RNNCell):
+    """
+    Implements a drnn_cell. This cell will activate and update only the neurons
+    for a particular timestep. Afterwards, the timestep is updated (i.e. timestep +=1)
 
-    # TODO: Do parameter checking.
-    # TODO: Give support for SRU and FRU.
+    """
+    # TODO: Give support for both SRU and FRU
     # TODO: Make cell work without a delay of 1 in the net_arch.
-    # TODO: Provide multi-unit support.
-    # TODO: Provide multiple equal timesteps in net_arch.
-    # TODO: Provide scope and name support.
+    # TODO: Make architecture work with list of cells
 
-    def __init__(self,rnn_unit_size,net_arch=[1],
-        rnn_unit=tf.contrib.rnn.BasicRNNCell,activation=tf.nn.tanh):
-        """
-        Instantiates a 'drnn_cell'. Every instance has a 'timestep',
-        this attribute control's the activation of the recurrent units. To reset
-        'timestep' use reset_timestep().
-
-        Args:
-          rnn_unit_size: Size of each recurrent unit.
-          net_arch: List of timesteps to consider. Every new timestep will
-          instantiate a new recurrent unit.
-          rnn_unit: Class of recurrent units.
-          activation: Activation function of the recurrent units.
-
-        """
-        self.rnn_unit_size = rnn_unit_size
+    def __init__(self,
+        net_arch=[1],
+        rnn_unit=tf.contrib.rnn.BasicRNNCell,
+        rnn_unit_params={'unit_size':5}):
         self.net_arch = net_arch
-        self.activation = activation
+        self.rnn_unit = tf.contrib.rnn.BasicRNNCell
+        self.rnn_unit_params=rnn_unit_params
         self.cell={}
         self.timestep=1
+        self.state_dim=0
+
         outputs = []
         for key in net_arch:
             with tf.variable_scope('{}'.format(key),reuse=tf.AUTO_REUSE):
-                self.cell[key] = rnn_unit(rnn_unit_size)
+                self.cell[key] = rnn_unit(**rnn_unit_params)
+                self.state_dim+=self.cell[key].state_size
+                print('Current state size:{}'.format(self.cell[key].state_size))
 
     @property
     def state_size(self):
-        return len(self.net_arch)*self.rnn_unit_size
+        return self.state_dim
 
     @property
     def output_size(self):
-        return len(self.net_arch)*self.rnn_unit_size
+        return self.state_dim
+
+    @property
+    def rnn_unit_size(self):
+        return self.state_dim/len(self.net_arch)
 
     @property
     def get_timestep(self):
@@ -52,16 +50,7 @@ class BasicDRNNCell(tf.contrib.rnn.RNNCell):
         self.timestep=1
         print('Dynamic model timestep reset')
 
-    @property
-    def zero_state(self,batch_size,dtype):
-        return tf.zeros([batch_size,len(self.net_arch)*self.rnn_unit_size],
-            dtype=dtype)
-
-    def __call__(self, inputs, state, scope=None):
-        """
-        Runs the cells that activate on current timestep value. Input is fed to
-        the first cell.
-        """
+    def __call__(self, inputs,state, scope=None):
         cur_state_pos = 0
         output_list=[]
         state_list=[]
@@ -97,5 +86,5 @@ class BasicDRNNCell(tf.contrib.rnn.RNNCell):
         return stacked_outputs,stacked_states
 
     def zero_state(self,batch_size,dtype):
-        return tf.zeros([batch_size,len(self.net_arch)*self.rnn_unit_size],
+        return tf.zeros([batch_size,self.state_dim],
             dtype=dtype)
