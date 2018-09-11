@@ -73,7 +73,7 @@ def main(download=True):
     noisestd = 0.0
     # Train
     ret = runner.run_experiment(
-        '/zfsauton/home/joliva/data/modelnet/aeroplane.p',
+        data_path,
         arg_list=runner.misc.make_arguments(ac),
         exp_class=emb_exp.EmbedExperiment,
         fetcher_class=pfetcher.generate_fetchers(
