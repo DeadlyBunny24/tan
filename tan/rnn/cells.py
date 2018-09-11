@@ -133,18 +133,16 @@ class GRUSRUCell:
 class DRNNCell:
 
     def __init__(self, **kwargs):
-        self.rnn_unit_size = misc.get_default(kwargs, 'rnn_unit_size', 2)
         self.net_arch = misc.get_default(kwargs, 'net_arch', [1])
         self.rnn_unit = misc.get_default(kwargs, 'rnn_unit',
             tf.contrib.rnn.BasicRNNCell)
-        self.activation = misc.get_default(kwargs, 'activation', tf.nn.tanh)
-        self.scope = misc.get_default(kwargs, 'scope', None)
+        self.rnn_unit_params = misc.get_default(kwargs, 'rnn_unit_params',
+            {'num_units':10})
 
     def __call__(self, nout):
         cell = drnn.BasicDRNNCell(
-            rnn_unit_size=self.rnn_unit_size,
             net_arch=self.net_arch,
             rnn_unit=self.rnn_unit,
-            activation=self.activation)
+            rnn_unit_params=self.rnn_unit_params)
 
         return tf.contrib.rnn.OutputProjectionWrapper(cell, nout, reuse=tf.AUTO_REUSE)
