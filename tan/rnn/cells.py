@@ -136,13 +136,24 @@ class DRNNCell:
         self.net_arch = misc.get_default(kwargs, 'net_arch', [1])
         self.rnn_unit = misc.get_default(kwargs, 'rnn_unit',
             tf.contrib.rnn.BasicRNNCell)
+        self.state_time_tuple = misc.get_default(kwargs, 'state_time_tuple',
+            False)
         self.rnn_unit_params = misc.get_default(kwargs, 'rnn_unit_params',
             {'num_units':10})
+        self.cell={}
+        self.hidden_size=0
 
     def __call__(self, nout):
+
+        for key in self.net_arch:
+            with tf.variable_scope('{}'.format(key)):
+                self.cell[key] = self.rnn_unit(**self.rnn_unit_params)
+                self.hidden_size+=self.cell[key].state_size
+
         cell = drnn.BasicDRNNCell(
             net_arch=self.net_arch,
-            rnn_unit=self.rnn_unit,
-            rnn_unit_params=self.rnn_unit_params)
+            cell=self.cell,
+            hidden_size=self.hidden_size,
+            state_time_tuple=self.state_time_tuple)
 
         return tf.contrib.rnn.OutputProjectionWrapper(cell, nout, reuse=tf.AUTO_REUSE)
