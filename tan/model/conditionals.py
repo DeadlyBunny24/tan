@@ -56,8 +56,7 @@ def sample_mm(params_dim, base_distribution='gaussian'):
     batch_size = tf.to_int64(tf.shape(params_dim)[0])
     logits, means, lsigmas = tf.split(params_dim, 3, 1)
     sigmas = tf.exp(lsigmas, name='sigmas')
-    # sample multinomial
-    js = tf.multinomial(logits, 1, name='js')  # int64, Why the name??
+    js = tf.multinomial(logits, 1, name='js')
     inds = tf.concat(
         (tf.expand_dims(tf.range(batch_size, dtype=tf.int64), -1), js),
         1, name='inds')
@@ -78,7 +77,7 @@ def sample_mm(params_dim, base_distribution='gaussian'):
     sigma_zs = tf.expand_dims(
         tf.gather_nd(sigmas, inds, name='sigma_zs'), -1)
     samp = sigma_zs*zs + mu_zs
-    return samp #Why three dimensional?
+    return samp 
 
 
 def independent_model(inputs, nparams, single_marginal=False,
@@ -269,7 +268,7 @@ def rnn_model(inputs, nparams, rnn_class, param_func=None, conditioning=None,
 
     Args:
         inputs: N x d real tensor of the input covariates.
-        nparams: int of number of parameters to output per dimension. {Per dimension of what?}
+        nparams: int of number of parameters to output per dimension.
         rnn_class: function that returns an rnn_cell that outputs nparams when
             called rnn_class(nparams).
         param_func: optional function to apply on the N x d x nparams parameter

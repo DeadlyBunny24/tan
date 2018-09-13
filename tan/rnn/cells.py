@@ -75,7 +75,7 @@ class SRUCell:
             sru_cell = tf.contrib.rnn.MultiRNNCell(
                 [sru.SimpleSRUCell(
                     num_stats=self._num_stats,
-                    mavg_alphas=tf.constant(self._mavg_alphas),
+                    mavg_alphas=self._mavg_alphas,
                     output_dims=self._units,
                     recur_dims=self._recur_dims,
                     linear_out=False,
@@ -85,7 +85,7 @@ class SRUCell:
         else:
             sru_cell = sru.SimpleSRUCell(
                 num_stats=self._num_stats,
-                mavg_alphas=tf.constant(self._mavg_alphas),
+                mavg_alphas=self._mavg_alphas,
                 output_dims=self._units,
                 recur_dims=self._recur_dims,
                 linear_out=False,
@@ -110,7 +110,7 @@ class GRUSRUCell:
                     tf.contrib.rnn.GRUCell(self._units),
                     sru.SimpleSRUCell(
                         num_stats=self._num_stats,
-                        mavg_alphas=tf.constant(self._mavg_alphas),
+                        mavg_alphas=self._mavg_alphas,
                         output_dims=self._units,
                         recur_dims=self._recur_dims,
                         linear_out=False,
@@ -122,7 +122,7 @@ class GRUSRUCell:
                 tf.contrib.rnn.GRUCell(self._units),
                 sru.SimpleSRUCell(
                     num_stats=self._num_stats,
-                    mavg_alphas=tf.constant(self._mavg_alphas),
+                    mavg_alphas=self._mavg_alphas,
                     output_dims=self._units,
                     recur_dims=self._recur_dims,
                     linear_out=False,
