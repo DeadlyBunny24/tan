@@ -16,7 +16,7 @@ Conditional component to TANs, and code to sample.
 
 import tensorflow as tf
 from ..utils import linear
-
+from ..rnn import drnn
 
 def make_in_out(y, prepend_func=tf.ones, scope='make_in_out'):
     """Takes map y=transform(x) and prepends -1.
@@ -62,7 +62,7 @@ def sample_mm(params_dim, base_distribution='gaussian'):
         1, name='inds')
     # Sample from base distribution.
     if base_distribution == 'gaussian':
-        zs = tf.random_normal((batch_size, 1))
+        zs = tf.random_normal((batch_size, 1    ))
     elif base_distribution == 'laplace':
         zs = tf.log(tf.random_uniform((batch_size, 1))) - \
             tf.log(tf.random_uniform((batch_size, 1)))
@@ -77,7 +77,7 @@ def sample_mm(params_dim, base_distribution='gaussian'):
     sigma_zs = tf.expand_dims(
         tf.gather_nd(sigmas, inds, name='sigma_zs'), -1)
     samp = sigma_zs*zs + mu_zs
-    return samp
+    return samp 
 
 
 def independent_model(inputs, nparams, single_marginal=False,
@@ -257,7 +257,6 @@ def cond_model(inputs, nparams, tied_model=False, tied_bias=True,
         return y
     return params, sampler
 
-
 # TODO: change to ram_model.
 def rnn_model(inputs, nparams, rnn_class, param_func=None, conditioning=None,
               conditioning_dim=None, use_conditioning=True):
@@ -300,9 +299,10 @@ def rnn_model(inputs, nparams, rnn_class, param_func=None, conditioning=None,
                 conditioning = linear.linear(conditioning, conditioning_dim)
             tiled_conditioning = tf.tile(
                 tf.expand_dims(conditioning, 1), [1, d, 1])
-            inputs = tf.concat(
-                (inputs, tiled_conditioning), 2)
+            inputs = tf.concat((inputs, tiled_conditioning), 2)
         params = tf.nn.dynamic_rnn(rnn_cell, inputs, dtype=tf.float32)[0]
+        if isinstance(rnn_cell._cell, drnn.BasicDRNNCell):
+            rnn_cell._cell.reset_timestep
         if param_func is not None:
             with tf.variable_scope('param_func'):
                 params = param_func(params, param_conditioning)
@@ -331,6 +331,8 @@ def rnn_model(inputs, nparams, rnn_class, param_func=None, conditioning=None,
                 input_ = sample_mm(params_dim,
                                    base_distribution=base_distribution)
                 y_dims.append(input_)
+            if isinstance(rnn_cell._cell, drnn.BasicDRNNCell):
+                rnn_cell._cell.reset_timestep
             y = tf.concat(y_dims, 1, 'y_samp')
         return y
     return params, sampler
