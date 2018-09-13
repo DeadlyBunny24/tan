@@ -56,8 +56,7 @@ def sample_mm(params_dim, base_distribution='gaussian'):
     batch_size = tf.to_int64(tf.shape(params_dim)[0])
     logits, means, lsigmas = tf.split(params_dim, 3, 1)
     sigmas = tf.exp(lsigmas, name='sigmas')
-    # sample multinomial
-    js = tf.multinomial(logits, 1, name='js')  # int64
+    js = tf.multinomial(logits, 1, name='js')
     inds = tf.concat(
         (tf.expand_dims(tf.range(batch_size, dtype=tf.int64), -1), js),
         1, name='inds')

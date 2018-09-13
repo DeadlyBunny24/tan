@@ -10,6 +10,7 @@ class SimpleSRUCell(tf.contrib.rnn.RNNCell):
     def __init__(self, num_stats, mavg_alphas, output_dims, recur_dims,
                  learn_alphas=False, linear_out=False,
                  include_input=False, activation=tf.nn.relu):
+        mavg_alphas = tf.constant(mavg_alphas)         
         self._num_stats = num_stats
         self._output_dims = output_dims
         self._recur_dims = recur_dims
