@@ -16,7 +16,7 @@ Conditional component to TANs, and code to sample.
 
 import tensorflow as tf
 from ..utils import linear
-
+from ..rnn import drnn
 
 def make_in_out(y, prepend_func=tf.ones, scope='make_in_out'):
     """Takes map y=transform(x) and prepends -1.
@@ -56,14 +56,13 @@ def sample_mm(params_dim, base_distribution='gaussian'):
     batch_size = tf.to_int64(tf.shape(params_dim)[0])
     logits, means, lsigmas = tf.split(params_dim, 3, 1)
     sigmas = tf.exp(lsigmas, name='sigmas')
-    # sample multinomial
-    js = tf.multinomial(logits, 1, name='js')  # int64
+    js = tf.multinomial(logits, 1, name='js')
     inds = tf.concat(
         (tf.expand_dims(tf.range(batch_size, dtype=tf.int64), -1), js),
         1, name='inds')
     # Sample from base distribution.
     if base_distribution == 'gaussian':
-        zs = tf.random_normal((batch_size, 1))
+        zs = tf.random_normal((batch_size, 1    ))
     elif base_distribution == 'laplace':
         zs = tf.log(tf.random_uniform((batch_size, 1))) - \
             tf.log(tf.random_uniform((batch_size, 1)))
@@ -78,7 +77,7 @@ def sample_mm(params_dim, base_distribution='gaussian'):
     sigma_zs = tf.expand_dims(
         tf.gather_nd(sigmas, inds, name='sigma_zs'), -1)
     samp = sigma_zs*zs + mu_zs
-    return samp
+    return samp 
 
 
 def independent_model(inputs, nparams, single_marginal=False,
@@ -257,7 +256,6 @@ def cond_model(inputs, nparams, tied_model=False, tied_bias=True,
             y = tf.slice(y, [0, 1], [-1, -1], 'y_samp')
         return y
     return params, sampler
-
 
 # TODO: change to ram_model.
 def rnn_model(inputs, nparams, rnn_class, param_func=None, conditioning=None,
