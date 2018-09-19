@@ -23,7 +23,6 @@ class BasicDRNNCell(tf.contrib.rnn.RNNCell):
         self.timestep=1
         self.hidden_size=hidden_size
         self.state_time_tuple=state_time_tuple
-        self.cur_list_key={}
 
     @property
     def state_size(self):
@@ -47,51 +46,60 @@ class BasicDRNNCell(tf.contrib.rnn.RNNCell):
         print('Dynamic model timestep reset')
 
     def __call__(self, inputs,state, scope=None):
-        cur_state_pos = 0
-        output_list=[]
-        init_previous_state = inputs
+        with tf.name_scope('t_{}'.format(self.timestep)):
+            cur_state_pos = 0
+            output_list=[]
+            init_previous_state = inputs
+            cur_list_key={}
 
-        if not tf.get_variable_scope().reuse:
-            # This portion activates all cells so that all variables are initialized
-            # before OutputProjectionWrapper sets scope.reuse to True.
-            # Once it's true, the cells won't be able instantiate new variables.
-            # (e.g. kernel, bias)
-            print('Initializing cells')
+            # This loop extracts the last state of each recurrent unit.
             for key in self.net_arch:
                 cur_state = array_ops.slice(state, [0, cur_state_pos],
                     [-1, self.rnn_unit_size])
-                if (self.state_time_tuple):
-                    cur_state = (cur_state,self.timestep)
-                outputs, init_previous_state = self.cell[key](
-                    init_previous_state,cur_state,'{}'.format(key))
-                self.cur_list_key[key]=tf.zeros(init_previous_state.shape,tf.float32)
-            # return state,state
+                cur_list_key[key]=cur_state
+                print('current state pos:{}'.format(cur_state_pos))
+                cur_state_pos+=self.rnn_unit_size
 
-        # This sets the reuse of the previously initialized variables to True.
-        # That way, TensorFlow will look for the variables instead of creating them
-        with tf.variable_scope(tf.get_variable_scope(), reuse=True):
-            for key in self.net_arch:
-                if self.state_time_tuple:
-                    cur_state = (self.cur_list_key[key],self.timestep)
-                else:
-                    cur_state =  self.cur_list_key[key]
-                if key==1:
-                    with tf.name_scope('{}'.format(key)):
-                        output, self.cur_list_key[key] = self.cell[key](inputs,
-                        cur_state,'{}'.format(key))
-                elif (self.timestep % key)==0:
-                    with tf.name_scope('{}'.format(key)):
-                        output, self.cur_list_key[key] = self.cell[key](
-                        self.cur_list_key[previous_key],cur_state,'{}'.format(key))
-                # This works because the first key sets the value of previous_key
-                # A recurrent unit with delay one is nececesary for this to work.
-                previous_key = key
-                output_list.append(output)
-            stacked_outputs = tf.concat(output_list,axis=1)
-            stacked_states = tf.concat([self.cur_list_key[key] \
-            for key in self.net_arch],axis=1)
-            self.timestep+=1
-            return stacked_outputs,stacked_states
+            if not tf.get_variable_scope().reuse:
+                # This portion activates all cells so that all variables are initialized
+                # before OutputProjectionWrapper sets scope.reuse to True.
+                # Once it's true, the cells won't be able instantiate new variables.
+                # (e.g. kernel, bias)
+                print('Initializing cells')
+                for key in self.net_arch:
+                    cur_state = array_ops.slice(state, [0, cur_state_pos],
+                        [-1, self.rnn_unit_size])
+                    if (self.state_time_tuple):
+                        cur_state = (cur_state,self.timestep)
+                    outputs, init_previous_state = self.cell[key](
+                        init_previous_state,cur_state,'{}'.format(key))
+                # return state,state
+
+            # This sets the reuse of the previously initialized variables to True.
+            # That way, TensorFlow will look for the variables instead of creating them
+            with tf.variable_scope(tf.get_variable_scope(), reuse=True):
+                for key in self.net_arch:
+                    if self.state_time_tuple:
+                        cur_state = (cur_list_key[key],self.timestep)
+                    else:
+                        cur_state =  cur_list_key[key]
+                    if key==1:
+                        with tf.name_scope('{}'.format(key)):
+                            output, cur_list_key[key] = self.cell[key](inputs,
+                            cur_state,'{}'.format(key))
+                    elif (self.timestep % key)==0:
+                        with tf.name_scope('{}'.format(key)):
+                            output, cur_list_key[key] = self.cell[key](
+                            cur_list_key[previous_key],cur_state,'{}'.format(key))
+                    # This works because the first key sets the value of previous_key
+                    # A recurrent unit with delay one is nececesary for this to work.
+                    previous_key = key
+                    output_list.append(output)
+                stacked_outputs = tf.concat(output_list,axis=1)
+                stacked_states = tf.concat([cur_list_key[key] \
+                for key in self.net_arch],axis=1)
+                self.timestep+=1
+                return stacked_outputs,stacked_states
 
     def zero_state(self,batch_size,dtype):
         return tf.zeros([batch_size,self.hidden_size],
