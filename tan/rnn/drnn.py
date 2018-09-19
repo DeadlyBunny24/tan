@@ -5,41 +5,37 @@ class BasicDRNNCell(tf.contrib.rnn.RNNCell):
     """
     Implements a drnn_cell. This cell will activate and update only the neurons
     for a particular timestep. Afterwards, the timestep is updated (i.e. timestep +=1)
-
+    Make sure to reset timestep when the sequence finishes.
     """
-    # TODO: Give support for both SRU and FRU
     # TODO: Make cell work without a delay of 1 in the net_arch.
-    # TODO: Make architecture work with list of cells
+    # TODO: Make architecture work with layers of different cells.
+    # TODO: Clean up cell initialization
+    # TODO: Remove cur_list_key from the cell attributes. It is kept to
+    # visualize better in Tensorboard.
 
     def __init__(self,
         net_arch=[1],
-        rnn_unit=tf.contrib.rnn.BasicRNNCell,
-        rnn_unit_params={'unit_size':5}):
+        cell={},
+        hidden_size=0,
+        state_time_tuple=False):
         self.net_arch = net_arch
-        self.rnn_unit = tf.contrib.rnn.BasicRNNCell
-        self.rnn_unit_params=rnn_unit_params
-        self.cell={}
+        self.cell=cell
         self.timestep=1
-        self.state_dim=0
-
-        outputs = []
-        for key in net_arch:
-            with tf.variable_scope('{}'.format(key),reuse=tf.AUTO_REUSE):
-                self.cell[key] = rnn_unit(**rnn_unit_params)
-                self.state_dim+=self.cell[key].state_size
-                print('Current state size:{}'.format(self.cell[key].state_size))
+        self.hidden_size=hidden_size
+        self.state_time_tuple=state_time_tuple
+        self.cur_list_key={}
 
     @property
     def state_size(self):
-        return self.state_dim
+        return self.hidden_size
 
     @property
     def output_size(self):
-        return self.state_dim
+        return self.hidden_size
 
     @property
     def rnn_unit_size(self):
-        return self.state_dim/len(self.net_arch)
+        return self.hidden_size/len(self.net_arch)
 
     @property
     def get_timestep(self):
@@ -53,38 +49,50 @@ class BasicDRNNCell(tf.contrib.rnn.RNNCell):
     def __call__(self, inputs,state, scope=None):
         cur_state_pos = 0
         output_list=[]
-        state_list=[]
-        previous_state = inputs
         init_previous_state = inputs
 
-        if tf.get_variable_scope().reuse:
+        if not tf.get_variable_scope().reuse:
             # This portion activates all cells so that all variables are initialized
             # before OutputProjectionWrapper sets scope.reuse to True.
             # Once it's true, the cells won't be able instantiate new variables.
             # (e.g. kernel, bias)
+            print('Initializing cells')
             for key in self.net_arch:
                 cur_state = array_ops.slice(state, [0, cur_state_pos],
                     [-1, self.rnn_unit_size])
+                if (self.state_time_tuple):
+                    cur_state = (cur_state,self.timestep)
                 outputs, init_previous_state = self.cell[key](
                     init_previous_state,cur_state,'{}'.format(key))
+                self.cur_list_key[key]=tf.zeros(init_previous_state.shape,tf.float32)
+            # return state,state
 
-        for key in self.net_arch:
-            cur_state = array_ops.slice(state, [0, cur_state_pos],
-                [-1, self.rnn_unit_size])
-
-            if (self.timestep % key)==0:
-                output, new_state = self.cell[key](previous_state,cur_state,
-                    '{}'.format(key))
-
-            previous_state = new_state
-            output_list.append(output)
-            state_list.append(new_state)
-            cur_state_pos += self.rnn_unit_size
-        stacked_outputs = tf.concat(output_list,axis=1)
-        stacked_states = tf.concat(state_list,axis=1)
-        self.timestep+=1
-        return stacked_outputs,stacked_states
+        # This sets the reuse of the previously initialized variables to True.
+        # That way, TensorFlow will look for the variables instead of creating them
+        with tf.variable_scope(tf.get_variable_scope(), reuse=True):
+            for key in self.net_arch:
+                if self.state_time_tuple:
+                    cur_state = (self.cur_list_key[key],self.timestep)
+                else:
+                    cur_state =  self.cur_list_key[key]
+                if key==1:
+                    with tf.name_scope('{}'.format(key)):
+                        output, self.cur_list_key[key] = self.cell[key](inputs,
+                        cur_state,'{}'.format(key))
+                elif (self.timestep % key)==0:
+                    with tf.name_scope('{}'.format(key)):
+                        output, self.cur_list_key[key] = self.cell[key](
+                        self.cur_list_key[previous_key],cur_state,'{}'.format(key))
+                # This works because the first key sets the value of previous_key
+                # A recurrent unit with delay one is nececesary for this to work.
+                previous_key = key
+                output_list.append(output)
+            stacked_outputs = tf.concat(output_list,axis=1)
+            stacked_states = tf.concat([self.cur_list_key[key] \
+            for key in self.net_arch],axis=1)
+            self.timestep+=1
+            return stacked_outputs,stacked_states
 
     def zero_state(self,batch_size,dtype):
-        return tf.zeros([batch_size,self.state_dim],
+        return tf.zeros([batch_size,self.hidden_size],
             dtype=dtype)

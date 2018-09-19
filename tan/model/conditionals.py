@@ -301,9 +301,10 @@ def rnn_model(inputs, nparams, rnn_class, param_func=None, conditioning=None,
                 conditioning = linear.linear(conditioning, conditioning_dim)
             tiled_conditioning = tf.tile(
                 tf.expand_dims(conditioning, 1), [1, d, 1])
-            inputs = tf.concat(
-                (inputs, tiled_conditioning), 2)
+            inputs = tf.concat((inputs, tiled_conditioning), 2)
         params = tf.nn.dynamic_rnn(rnn_cell, inputs, dtype=tf.float32)[0]
+        if isinstance(rnn_cell._cell, drnn.BasicDRNNCell):
+            rnn_cell._cell.reset_timestep
         if param_func is not None:
             with tf.variable_scope('param_func'):
                 params = param_func(params, param_conditioning)
@@ -332,6 +333,8 @@ def rnn_model(inputs, nparams, rnn_class, param_func=None, conditioning=None,
                 input_ = sample_mm(params_dim,
                                    base_distribution=base_distribution)
                 y_dims.append(input_)
+            if isinstance(rnn_cell._cell, drnn.BasicDRNNCell):
+                rnn_cell._cell.reset_timestep
             y = tf.concat(y_dims, 1, 'y_samp')
         return y
     return params, sampler
