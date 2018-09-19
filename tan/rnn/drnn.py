@@ -23,10 +23,7 @@ class BasicDRNNCell(tf.contrib.rnn.RNNCell):
         self.timestep=1
         self.hidden_size=hidden_size
         self.state_time_tuple=state_time_tuple
-<<<<<<< HEAD
         self.cur_list_key={}
-=======
->>>>>>> 32c450d7564e61dbfc1896c808eeccf50efe0918
 
     @property
     def state_size(self):
