@@ -47,6 +47,21 @@ def permute(x, perm, name='perm'):
             return x
     return z, logdet, invmap
 
+def peq_layer(x,l,g,name='permeq_layer'):
+    """Permutes according perm along last dimension."""
+    with tf.variable_scope(name) as scope:
+        d = x.get_shape().as_list()[-1]
+        A = l*tf.eye(d) + g*tf.ones(d)
+        z = tf.matmul(x,A)
+        logdet = tf.linalg.logdet(A)
+
+    # Inverse map
+    def invmap(z):
+        with tf.variable_scope(scope, reuse=True):
+            A_inv = tf.linalg.inv(A)
+            x = tf.matmul(z,A_inv)
+            return x
+    return z, logdet, invmap
 
 def invperm(perm):
     """Returns the inverse permutation."""
