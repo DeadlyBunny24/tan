@@ -29,6 +29,9 @@ class RedConfig:
         self.trainable_A = misc.get_default(kwargs, 'trainable_A', True)
         self.trainable_b = misc.get_default(kwargs, 'trainable_b', True)
         self.mat_func = misc.get_default(kwargs, 'mat_func', trans.get_LU_map)
+        # Permutation equivariant parameters
+        self.peq_lambda = misc.get_default(kwargs, 'peq_lambda', 1)
+        self.peq_gamma = misc.get_default(kwargs, 'peq_gamma', 1)
         # RNN transformation parameters.
         self.trans_state_size = misc.get_default(
             kwargs, 'trans_state_size', 16)
@@ -119,6 +122,11 @@ class RedConfig:
             trans.shift: {},
             trans.leaky_transformation: {
                 'alpha': self.relu_alpha},
+            trans.leaky_transformation: {
+                'alpha': self.relu_alpha},
+            trans.peq_layer: {
+                'l': self.peq_lambda,
+                'g': self.peq_gamma}    
         }
 
         # Likelihood parameters.
