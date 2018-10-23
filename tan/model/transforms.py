@@ -48,8 +48,25 @@ def permute(x, perm, name='perm'):
     return z, logdet, invmap
 
 def peq_layer(x,l,g,name='permeq_layer'):
-    """Permutes according perm along last dimension."""
+    """Permutation equivariant linear tranformation of x. It's calculated as
+    follows:
+
+        T(x) = lambda*tf.eye(d)+gamma*tf.ones(d)
+
+  Args:
+    x: A Tensor.
+    l: Initializer of lambda parameter.
+    g: Initializer of gamma parameter.
+    name: A name for the operation (optional).
+  Returns:
+    z: N x d linearly transformed covariates.
+    logdet: scalar, the log determinant of the Jacobian for transformation.
+    invmap: function that computes the inverse transformation.
+  """
+
     with tf.variable_scope(name) as scope:
+        l = tf.get_variable('lambda', dtype=tf.float32,initializer=l)
+        g = tf.get_variable('gamma', dtype=tf.float32,initializer=g)
         d = x.get_shape().as_list()[-1]
         A = l*tf.eye(d) + g*tf.ones(d)
         z = tf.matmul(x,A)
@@ -62,6 +79,78 @@ def peq_layer(x,l,g,name='permeq_layer'):
             x = tf.matmul(z,A_inv)
             return x
     return z, logdet, invmap
+
+def piecewise_transform(x,x_cond,y_cond,name='ml_exp_layer'):
+    """Computes a piecewise linear transformation of x element wise.
+    Each piece of the linear tranformation is calculated as follows:
+
+        f(x) = (g(y_cond[i+1])-g(y_cond[i])/g(x_cond[i+1])-g(cond_x[i]))*\
+                (x-g(x_cond[i]))+g(y_cond[i])
+
+        where i is the interval in the domain where x lies and g(.) is an
+        exponential transformation of the domain.
+
+  Args:
+    x: A Tensor.
+    x_cond: A list of domain boundaries.
+    y_cond: A list of range boundaries.
+    name: A name for the operation (optional).
+  Returns:
+    z: N x d linearly transformed covariates.
+    logdet: scalar, the log determinant of the Jacobian for transformation.
+    invmap: function that computes the inverse transformation.
+  """
+
+    with tf.variable_scope(name) as scope:
+        y_cond = tf.constant(y_cond,tf.float32,name='values')
+        x_cond = tf.constant(x_cond,tf.float32,name='times')
+
+        d = x_cond.get_shape().as_list()[-1]
+
+        values_exp = tf.exp(y_cond,'values_exp')
+        time_exp = tf.exp(x_cond,'time_exp')
+
+        values = tf.stack([tf.reduce_sum(values_exp[:i+1]) for i in range(d)])
+        time = tf.stack([tf.reduce_sum(time_exp[:i+1]) for i in range(d)])
+
+        slopes = (values[1:]-values[:-1])/(time[1:]-time[:-1])
+
+        def piecewise_helper(arg_x):
+            arg_x=arg_x[0]
+            interval = tf.train.piecewise_constant(arg_x,
+                tf.unstack(time[1:-1]),range(d-1))
+            return (slopes[interval]*(arg_x-time[interval])+
+                values[interval],slopes[interval])
+
+        # Reshape to ensure tf.map_fn recieves a 1d array as input
+        original_shape = tf.shape(x)
+        reshape_x = tf.reshape(x,[-1])
+
+        # The input (x,x) is a tuple to comply with map_fn output structure.
+        reshape_z,reshape_logdet = tf.map_fn(piecewise_helper,
+            (reshape_x,reshape_x))
+        z = tf.reshape(reshape_z,original_shape)
+        logdet = tf.reduce_sum(tf.log(
+            tf.reshape(reshape_logdet,original_shape)),axis=1)
+
+    # Inverse map
+    def invmap(z):
+        with tf.variable_scope(scope, reuse=True):
+            def inverse_helper(z_arg):
+                interval = tf.train.piecewise_constant(z_arg,
+                    tf.unstack(values[1:-1]),range(d-1))
+                x_inv = (1/slopes[interval])*(z_arg-values[interval])+\
+                    time[interval]
+                return x_inv
+            # Reshape to ensure tf.map_fn recieves a 1d array as input
+            original_shape = tf.shape(z)
+            reshape_z = tf.reshape(z,[-1])
+
+            reshape_x_o = tf.map_fn(inverse_helper,reshape_z)
+            x_o = tf.reshape(reshape_z,original_shape)
+            return x_o
+
+    return z,logdet,invmap
 
 def invperm(perm):
     """Returns the inverse permutation."""

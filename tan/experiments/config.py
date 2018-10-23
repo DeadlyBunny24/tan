@@ -32,6 +32,9 @@ class RedConfig:
         # Permutation equivariant parameters
         self.peq_lambda = misc.get_default(kwargs, 'peq_lambda', 1)
         self.peq_gamma = misc.get_default(kwargs, 'peq_gamma', 1)
+        # Piecewise linear transformation parameters
+        self.piecewise_time = misc.get_default(kwargs, 'piecewise_time', [1,2,3])
+        self.piecewise_values = misc.get_default(kwargs, 'piecewise_values', [4,5,7])
         # RNN transformation parameters.
         self.trans_state_size = misc.get_default(
             kwargs, 'trans_state_size', 16)
@@ -126,7 +129,10 @@ class RedConfig:
                 'alpha': self.relu_alpha},
             trans.peq_layer: {
                 'l': self.peq_lambda,
-                'g': self.peq_gamma}    
+                'g': self.peq_gamma},
+            trans.piecewise_transform: {
+                'x_cond': self.piecewise_time,
+                'y_cond': self.piecewise_values}
         }
 
         # Likelihood parameters.
