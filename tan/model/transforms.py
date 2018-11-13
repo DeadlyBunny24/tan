@@ -65,12 +65,14 @@ def peq_layer(x,l,g,name='permeq_layer'):
   """
 
     with tf.variable_scope(name) as scope:
-        l = tf.get_variable('lambda', dtype=tf.float32,initializer=l)
-        g = tf.get_variable('gamma', dtype=tf.float32,initializer=g)
+        l = tf.get_variable('lambda', dtype=tf.float32,initializer=l,
+            trainable=True)
+        g = tf.get_variable('gamma', dtype=tf.float32,initializer=g,
+            trainable=True)
         d = x.get_shape().as_list()[-1]
         A = l*tf.eye(d) + g*tf.ones(d)
         z = tf.matmul(x,A)
-        logdet = tf.linalg.logdet(A)
+        logdet = tf.log(tf.pow(l,d-1)*(l+d*g))
 
     # Inverse map
     def invmap(z):
@@ -79,8 +81,8 @@ def peq_layer(x,l,g,name='permeq_layer'):
             x = tf.matmul(z,A_inv)
             return x
     return z, logdet, invmap
-
-def piecewise_transform(x,x_cond,y_cond,name='ml_exp_layer'):
+    
+def piecewise_transform(x,x_cond,y_cond,name='piecewise_transform'):
     """Computes a piecewise linear transformation of x element wise.
     Each piece of the linear tranformation is calculated as follows:
 
@@ -102,8 +104,11 @@ def piecewise_transform(x,x_cond,y_cond,name='ml_exp_layer'):
   """
 
     with tf.variable_scope(name) as scope:
-        y_cond = tf.constant(y_cond,tf.float32,name='values')
-        x_cond = tf.constant(x_cond,tf.float32,name='times')
+        y_constant = tf.constant(y_cond,tf.float32,name='values')
+        x_constant = tf.constant(x_cond,tf.float32,name='times')
+
+        y_cond = tf.contrib.framework.sort(y_constant)
+        x_cond = tf.contrib.framework.sort(x_constant)
 
         d = x_cond.get_shape().as_list()[-1]
 
@@ -115,42 +120,36 @@ def piecewise_transform(x,x_cond,y_cond,name='ml_exp_layer'):
 
         slopes = (values[1:]-values[:-1])/(time[1:]-time[:-1])
 
-        def piecewise_helper(arg_x):
-            arg_x=arg_x[0]
-            interval = tf.train.piecewise_constant(arg_x,
-                tf.unstack(time[1:-1]),range(d-1))
-            return (slopes[interval]*(arg_x-time[interval])+
-                values[interval],slopes[interval])
+        unstack_time = tf.unstack(time[1:-1])
+        unstack_values = tf.unstack(values[1:-1])
 
-        # Reshape to ensure tf.map_fn recieves a 1d array as input
-        original_shape = tf.shape(x)
-        reshape_x = tf.reshape(x,[-1])
+        z = (slopes[0]*(x-unstack_time[0])+unstack_values[0])*tf.sign(-tf.sign(x-unstack_time[0])+1)
+        z += (slopes[-1]*(x-unstack_time[-1])+unstack_values[-1])*tf.sign(tf.sign(x-time[-1])+1)
+        for counter in range(len(unstack_time)-1):
+            z += (slopes[counter+1]*(x-unstack_time[counter])+unstack_values[counter])*\
+            tf.sign(tf.sign(x-unstack_time[counter])+1)*\
+            tf.sign(-tf.sign(x-unstack_time[counter+1])+1)
 
-        # The input (x,x) is a tuple to comply with map_fn output structure.
-        reshape_z,reshape_logdet = tf.map_fn(piecewise_helper,
-            (reshape_x,reshape_x))
-        z = tf.reshape(reshape_z,original_shape)
-        logdet = tf.reduce_sum(tf.log(
-            tf.reshape(reshape_logdet,original_shape)),axis=1)
+        slope_logdet = (slopes[0])*tf.sign(-tf.sign(x-unstack_time[0])+1)
+        slope_logdet += (slopes[-1])*tf.sign(tf.sign(x-time[-1])+1)
+        for counter in range(len(unstack_time)-1):
+            slope_logdet += (slopes[counter+1])*\
+            tf.sign(tf.sign(x-unstack_time[counter])+1)*\
+            tf.sign(-tf.sign(x-unstack_time[counter+1])+1)
 
-    # Inverse map
-    def invmap(z):
-        with tf.variable_scope(scope, reuse=True):
-            def inverse_helper(z_arg):
-                interval = tf.train.piecewise_constant(z_arg,
-                    tf.unstack(values[1:-1]),range(d-1))
-                x_inv = (1/slopes[interval])*(z_arg-values[interval])+\
-                    time[interval]
-                return x_inv
-            # Reshape to ensure tf.map_fn recieves a 1d array as input
-            original_shape = tf.shape(z)
-            reshape_z = tf.reshape(z,[-1])
+        logdet = tf.reduce_sum(tf.log(slope_logdet),axis=-1)
 
-            reshape_x_o = tf.map_fn(inverse_helper,reshape_z)
-            x_o = tf.reshape(reshape_z,original_shape)
-            return x_o
+        def invmap(z):
+            with tf.variable_scope(scope, reuse=True):
+                x = (1/slopes[0]*(z-unstack_values[0])+unstack_time[0])*tf.sign(-tf.sign(z-unstack_values[0])+1)
+                x += (1/slopes[-1]*(z-unstack_values[-1])+unstack_time[-1])*tf.sign(tf.sign(z-values[-1])+1)
+                for counter in range(len(unstack_time)-1):
+                    x += (1/slopes[counter+1]*(z-unstack_values[counter])+unstack_time[counter])*\
+                    tf.sign(tf.sign(z-unstack_values[counter])+1)*\
+                    tf.sign(-tf.sign(z-unstack_values[counter+1])+1)
+                return x
 
-    return z,logdet,invmap
+        return z,logdet,invmap
 
 def invperm(perm):
     """Returns the inverse permutation."""
